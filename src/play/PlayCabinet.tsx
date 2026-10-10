@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useConsole } from "../app/ConsoleProvider";
 import {
   DIFFICULTY_SCALE,
@@ -9,6 +9,7 @@ import {
   type UniqueSpec,
 } from "./uniqueSpecs";
 import { createUniqueGame, type PlayableGame } from "./uniqueEngine";
+import { stepLabel, steps } from "./music";
 
 const QUICK: { mode: UniqueMode; title: string }[] = [
   { mode: "snake", title: "SNAKE" },
@@ -127,7 +128,12 @@ export function PlayCabinet() {
   };
 
   const togglePause = () => {
-    if (showHowTo) return;
+    if (showHowTo || status === "GAME OVER") {
+      begin();
+      if (status === "GAME OVER") gameRef.current?.restart();
+      setPaused(false);
+      return;
+    }
     if (paused) {
       gameRef.current?.resume();
       setPaused(false);
@@ -148,6 +154,26 @@ export function PlayCabinet() {
   };
 
   const playColor = settings.customTheme.accent;
+  const volumeStep = settings.volumeStep ?? 0;
+
+  const cycleVolume = () => {
+    const next = ((volumeStep + 1) % 4) as 0 | 1 | 2 | 3;
+    const level = steps()[next] ?? 0;
+    void unlockAudio().then(() => {
+      setSettings((current) => ({
+        ...current,
+        volumeStep: next,
+        audio: { ...current.audio, master: level, music: 1, sfx: 1, muted: next === 0 },
+      }));
+    });
+  };
+
+  useEffect(() => {
+    const playing = !showHowTo && !paused && status !== "GAME OVER" && settings.poweredOn && volumeStep > 0;
+    if (playing) audio.playTune(spec.mode, spec.scene);
+    else audio.stopTune();
+    return () => audio.stopTune();
+  }, [audio, spec.mode, spec.scene, showHowTo, paused, status, volumeStep, settings.poweredOn]);
 
   return (
     <div className="toy-shell" style={{ color: playColor }}>
@@ -212,13 +238,22 @@ export function PlayCabinet() {
       <div className="icon-row">
         <IconButton
           title="Power"
-          active={settings.poweredOn}
+          className="power-icon"
           onClick={() => {
             gameRef.current?.stop();
+            audio.stopTune();
             setSettings((current) => ({ ...current, poweredOn: false }));
           }}
         >
-          ⏻
+          <PowerIcon />
+        </IconButton>
+        <IconButton
+          title={`Volume ${stepLabel(volumeStep)}`}
+          className={`vol-toggle ${volumeStep === 0 ? "is-muted" : ""}`}
+          onClick={cycleVolume}
+        >
+          <VolumeIcon />
+          <span className="vol-tag">{stepLabel(volumeStep)}</span>
         </IconButton>
         <IconButton title="Settings" onClick={() => setShowSettings((v) => !v)}>
           ⚙
@@ -232,14 +267,20 @@ export function PlayCabinet() {
         <IconButton title="Restart" onClick={() => gameRef.current?.restart()}>
           ↻
         </IconButton>
-        <IconButton title="Stop" onClick={() => { gameRef.current?.stop(); setShowHowTo(true); }}>
+        <IconButton title="Stop" onClick={() => { gameRef.current?.stop(); setShowHowTo(true); setPaused(false); }}>
           ■
         </IconButton>
-        <IconButton title="Pause" onClick={togglePause} active={paused}>
-          ❚❚
-        </IconButton>
-        <IconButton title="Play" onClick={() => (showHowTo ? begin() : gameRef.current?.resume())}>
-          ▶
+        <IconButton
+          title={paused || showHowTo ? "Play" : "Pause"}
+          className={`pause-toggle ${paused || showHowTo ? "is-play" : "is-pause"}`}
+          onClick={togglePause}
+        >
+          <span className="pause-face pause-face-pause" aria-hidden="true">
+            <PauseIcon />
+          </span>
+          <span className="pause-face pause-face-play" aria-hidden="true">
+            <PlayIcon />
+          </span>
         </IconButton>
       </div>
 
@@ -376,16 +417,55 @@ function IconButton({
   children,
   onClick,
   title,
-  active = false,
+  className = "",
 }: {
-  children: string;
+  children: ReactNode;
   onClick: () => void;
   title: string;
-  active?: boolean;
+  className?: string;
 }) {
   return (
-    <button type="button" className={`icon-round ${active ? "is-on" : ""}`} title={title} onClick={onClick}>
+    <button type="button" className={`icon-round ${className}`} title={title} onClick={onClick}>
       {children}
     </button>
+  );
+}
+
+function PowerIcon() {
+  return (
+    <svg className="ui-ico" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M12 2v10M7.2 5.1a8 8 0 1 0 9.6 0"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function PauseIcon() {
+  return (
+    <svg className="ui-ico" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M7 5h3.2v14H7zM13.8 5H17v14h-3.2z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function VolumeIcon() {
+  return (
+    <svg className="ui-ico" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 9h3.2L12 5v14l-4.8-4H4V9z" fill="currentColor" />
+      <path d="M15 9.2c1.2 1 1.8 2.2 1.8 2.8S16.2 14 15 15M17.6 7c2 1.8 3 3.6 3 5s-1 3.2-3 5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function PlayIcon() {
+  return (
+    <svg className="ui-ico" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M8 5.2v13.6L19 12 8 5.2z" fill="currentColor" />
+    </svg>
   );
 }

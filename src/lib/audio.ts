@@ -1,5 +1,6 @@
 import type { AudioSettings } from "../storage/stores";
 import { playTone, type SfxKind } from "../play/sfx";
+import { TunePlayer, tuneForMode, type TuneId } from "../play/music";
 
 export class AudioBus {
   private context: AudioContext | null = null;
@@ -7,6 +8,8 @@ export class AudioBus {
   private music: GainNode | null = null;
   private sfx: GainNode | null = null;
   private settings: AudioSettings;
+  private player: TunePlayer | null = null;
+  private song: TuneId | null = null;
 
   constructor(settings: AudioSettings) {
     this.settings = settings;
@@ -22,6 +25,7 @@ export class AudioBus {
       this.music.connect(this.master);
       this.sfx.connect(this.master);
       this.master.connect(context.destination);
+      this.player = new TunePlayer(context, this.music);
     }
     if (this.context.state === "suspended") {
       await this.context.resume();
@@ -53,7 +57,20 @@ export class AudioBus {
   playSfx(kind: SfxKind): void {
     const context = this.context;
     const dest = this.sfx;
-    if (!context || !dest || this.settings.muted) return;
+    if (!context || !dest || this.settings.muted || this.settings.master <= 0) return;
     playTone(context, dest, kind);
+  }
+
+  playTune(mode: string, scene: number): void {
+    if (!this.player || this.settings.muted || this.settings.master <= 0) return;
+    const id = tuneForMode(mode, scene);
+    if (this.song === id) return;
+    this.song = id;
+    this.player.start(id, scene);
+  }
+
+  stopTune(): void {
+    this.player?.stop();
+    this.song = null;
   }
 }

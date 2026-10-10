@@ -38,10 +38,10 @@ export type AudioSettings = {
 };
 
 export const DEFAULT_AUDIO: AudioSettings = {
-  master: 0.7,
-  music: 0.5,
-  sfx: 0.7,
-  muted: false,
+  master: 0,
+  music: 1,
+  sfx: 1,
+  muted: true,
 };
 
 export type TouchSettings = {
@@ -68,6 +68,7 @@ export type AppSettings = {
   poweredOn: boolean;
   lastGameId: string | null;
   lastDifficulty: "simple" | "medium" | "hard" | "professor";
+  volumeStep: 0 | 1 | 2 | 3;
 };
 
 export const DEFAULT_CUSTOM_THEME: ConsoleTheme = {
@@ -88,6 +89,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   poweredOn: true,
   lastGameId: null,
   lastDifficulty: "simple",
+  volumeStep: 0,
 };
 
 export type HistoryRecord = {
@@ -122,7 +124,7 @@ export type SaveRecord = {
 export async function loadSettings(): Promise<AppSettings> {
   const stored = await db.get<AppSettings>(STORES.settings, "app");
   if (!stored) return DEFAULT_APP_SETTINGS;
-  return {
+  const merged = {
     ...DEFAULT_APP_SETTINGS,
     ...stored,
     ui: { ...DEFAULT_UI_SETTINGS, ...stored.ui },
@@ -130,6 +132,13 @@ export async function loadSettings(): Promise<AppSettings> {
     audio: { ...DEFAULT_AUDIO, ...stored.audio },
     touch: { ...DEFAULT_TOUCH, ...stored.touch },
     customTheme: { ...DEFAULT_CUSTOM_THEME, ...stored.customTheme },
+  };
+  const step = ([0, 1, 2, 3] as const).includes(merged.volumeStep) ? merged.volumeStep : 0;
+  const level = [0, 0.3, 0.6, 1][step] ?? 0;
+  return {
+    ...merged,
+    volumeStep: step,
+    audio: { ...merged.audio, master: level, music: 1, sfx: 1, muted: step === 0 },
   };
 }
 
