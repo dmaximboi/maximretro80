@@ -2,7 +2,7 @@
   "id": "/",
   "name": "MAXIM RETRO",
   "short_name": "MAXIM",
-  "description": "Offline retro cabinet with 200 local playable titles.",
+  "description": "Offline retro cabinet with original built-in games.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

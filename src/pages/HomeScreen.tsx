@@ -72,7 +72,7 @@ export function HomeScreen() {
           ))}
         </div>
         <div className="mt-4 space-y-1 text-[16px] opacity-80">
-          <div>LIBRARY 200</div>
+          <div>LIBRARY {games.length}</div>
           <div>INSTALLED {installed}</div>
           <div>{padConnected ? `CONTROLLER CONNECTED` : "NO CONTROLLER"}</div>
           {padConnected ? <div className="truncate text-[14px]">{padId}</div> : null}
@@ -83,7 +83,7 @@ export function HomeScreen() {
         <div className="relative min-h-[380px] p-5">
           <PixelTitle>MAXIM RETRO</PixelTitle>
           <p className="mt-3 max-w-xl opacity-85">
-            Personal cabinet. 200 licensed-era titles as metadata. User-owned ROMs only. No copyrighted ROMs are bundled.
+            Personal cabinet. Only original built-in games — one unique mode each. No remakes of the same title.
           </p>
           {featured ? (
             <div className="mt-6 flex flex-wrap items-end gap-4">

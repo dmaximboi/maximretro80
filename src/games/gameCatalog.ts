@@ -12,6 +12,7 @@ export const GAME_CATALOG: readonly GameCatalogEntry[] = CATALOG_SEEDS.map((seed
     id: `mr80-${padIndex(catalogIndex)}`,
     catalogIndex,
     title: seed.title,
+    mode: seed.mode,
     platform: seed.platform,
     year: seed.year,
     genres: seed.genres,
@@ -21,7 +22,7 @@ export const GAME_CATALOG: readonly GameCatalogEntry[] = CATALOG_SEEDS.map((seed
     description: seed.description,
     controls: seed.controls,
     engine: seed.engine,
-    romRequired: true,
+    romRequired: false,
     romExtensions: seed.romExtensions,
     artworkSeed: `${seed.title}:${seed.platform}:${seed.year}:${catalogIndex}`,
   };

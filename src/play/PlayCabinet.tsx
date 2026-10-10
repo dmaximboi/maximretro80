@@ -84,7 +84,7 @@ export function PlayCabinet() {
         setGoal(info.goal);
       },
       onLevelClear: (info) => {
-        setBanner(`LEVEL ${info.level} ${info.rank}`);
+        setBanner(`LEVEL ${String(info.level).padStart(2, "0")} ${info.rank}`);
         window.setTimeout(() => setBanner(null), 1200);
         if (selectedGame) void playedRef.current(selectedGame.id);
       },
@@ -301,8 +301,8 @@ export function PlayCabinet() {
             <Pad label="B" round onHold={(down) => hold("KeyX", down)} />
             <Pad label="A" round onHold={(down) => hold("KeyZ", down)} />
           </div>
-          <button type="button" className="icon-round library-fab" onClick={() => setShowLibrary((v) => !v)} title="All 200 games">
-            200
+          <button type="button" className="icon-round library-fab" onClick={() => setShowLibrary((v) => !v)} title={`${games.length} games`}>
+            {games.length}
           </button>
         </div>
       </div>
@@ -360,7 +360,7 @@ export function PlayCabinet() {
       {showLibrary ? (
         <div className="play-library">
           <div className="play-library-head">
-            <span>200 GAMES</span>
+            <span>{games.length} GAMES</span>
             <button type="button" onClick={() => setShowLibrary(false)}>
               CLOSE
             </button>

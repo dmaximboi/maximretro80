@@ -1,4 +1,4 @@
-export const EXPECTED_GAME_COUNT = 200;
+export const EXPECTED_GAME_COUNT = 30;
 
 export const PLATFORMS = [
   "NES",
@@ -67,6 +67,7 @@ export type GameCatalogEntry = {
   id: string;
   catalogIndex: number;
   title: string;
+  mode: string;
   platform: Platform;
   year: number;
   genres: readonly string[];
@@ -76,7 +77,7 @@ export type GameCatalogEntry = {
   description: string;
   controls: string;
   engine: EngineId;
-  romRequired: true;
+  romRequired: boolean;
   romExtensions: readonly string[];
   artworkSeed: string;
 };

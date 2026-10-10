@@ -19,7 +19,11 @@ export type PlayableGame = {
   press: (code: string, down: boolean) => void;
 };
 
-type Rect = { x: number; y: number; w: number; h: number };
+type Rect = { x: number; y: number; w: number; h: number; mark?: number };
+
+function pace(level: number): number {
+  return 1 + Math.max(0, level - 1) * 0.22;
+}
 
 function clamp(n: number, a: number, b: number): number {
   return Math.max(a, Math.min(b, n));
@@ -27,6 +31,12 @@ function clamp(n: number, a: number, b: number): number {
 
 function hits(a: Rect, b: Rect): boolean {
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+function stageNeed(level: number, start: number, grow: number): number {
+  const lv = Math.max(1, level);
+  const base = start + (lv - 1) * grow + (lv * lv - 1) * grow * 0.32;
+  return Math.max(1, Math.round(base * 2.5));
 }
 
 function seedRng(seed: number): () => number {
@@ -68,6 +78,7 @@ export function createUniqueGame(
   let tick = 0;
   let objective = 0;
   let target = 8;
+  let waveSize = 1;
   let launched = false;
   let dropLock = false;
   let progress = 0;
@@ -147,9 +158,8 @@ export function createUniqueGame(
     const rank = rankFor(score, par * level, hitsTaken);
     hooks.onSfx("success");
     hooks.onSfx("level");
-    hooks.onLevelClear({ level, rank, score });
     level += 1;
-    hud();
+    hooks.onLevelClear({ level, rank, score });
     setupLevel();
     hooks.onStatus("LEVEL " + String(level).padStart(2, "0"));
   };
@@ -192,6 +202,32 @@ export function createUniqueGame(
     if (!collide(normalized, piece.x, piece.y)) piece.cells = normalized;
   };
 
+  const fillBricks = () => {
+    items.length = 0;
+    const cols = 7 + (level % 3);
+    const rows = 5 + Math.min(6, level + 1);
+    for (let r = 0; r < rows; r += 1) {
+      for (let c = 0; c < cols; c += 1) {
+        if ((c + r + spec.scene + level + objective) % 7 === 0) continue;
+        items.push({ x: 10 + c * ((W - 20) / cols), y: 18 + r * 14, w: (W - 20) / cols - 4, h: 10 });
+      }
+    }
+    waveSize = Math.max(1, items.length);
+  };
+
+  const fillInvaders = () => {
+    foes.length = 0;
+    const spd = scale.speed * pace(level);
+    const cols = 6 + Math.min(4, level);
+    const rows = 3 + Math.min(4, level);
+    for (let r = 0; r < rows; r += 1) {
+      for (let c = 0; c < cols; c += 1) {
+        foes.push({ x: 24 + c * 34, y: 18 + r * 18, w: 16, h: 10, vx: 0.55 * spd, vy: 0, kind: 0 });
+      }
+    }
+    waveSize = Math.max(1, foes.length);
+  };
+
   const setupLevel = () => {
     const rnd = seedRng(spec.scene * 97 + level * 13);
     items.length = 0;
@@ -203,8 +239,8 @@ export function createUniqueGame(
     objective = 0;
     player.vx = 0;
     player.vy = 0;
-    const spd = scale.speed * (1 + (level - 1) * 0.08);
-    target = 6 + level * 2;
+    const spd = scale.speed * pace(level);
+    target = stageNeed(level, 24, 16);
     player.w = Math.round(14 * scale.size);
     player.h = Math.round(12 * scale.size);
 
@@ -213,7 +249,7 @@ export function createUniqueGame(
       dir = { x: 1, y: 0 };
       nextDir = { x: 1, y: 0 };
       food = { x: 3 + Math.floor(rnd() * 14), y: 2 + Math.floor(rnd() * 10) };
-      target = 5 + level;
+      target = stageNeed(level, 18, 12);
     }
     if (spec.mode === "bricks") {
       player.x = 130;
@@ -224,24 +260,18 @@ export function createUniqueGame(
       ball.y = 170;
       ball.vx = 2 * spd;
       ball.vy = -2.2 * spd;
-      const cols = 6 + (level % 4);
-      const rows = 3 + Math.min(4, level);
-      for (let r = 0; r < rows; r += 1) {
-        for (let c = 0; c < cols; c += 1) {
-          if ((c + r + spec.scene + level) % 7 === 0) continue;
-          items.push({ x: 10 + c * ((W - 20) / cols), y: 18 + r * 14, w: (W - 20) / cols - 4, h: 10 });
-        }
-      }
+      fillBricks();
+      target = stageNeed(level, 2, 1);
     }
     if (spec.mode === "dodge" || spec.mode === "catch") {
       player.x = 150;
       player.y = 196;
-      target = spec.mode === "dodge" ? 12 + level * 3 : 8 + level * 2;
+      target = spec.mode === "dodge" ? stageNeed(level, 42, 26) : stageNeed(level, 24, 16);
     }
     if (spec.mode === "coins") {
       player.x = 20;
       player.y = 180;
-      for (let i = 0; i < 8 + level; i += 1) {
+      for (let i = 0; i < stageNeed(level, 16, 10); i += 1) {
         items.push({ x: 16 + rnd() * 280, y: 16 + rnd() * 170, w: 10, h: 10 });
       }
       for (let i = 0; i < Math.min(1 + Math.floor(level / 2), 3); i += 1) {
@@ -250,9 +280,9 @@ export function createUniqueGame(
     }
     if (spec.mode === "race") {
       playerLane = 1;
-      carSpeed = 1.4 * scale.speed;
+      carSpeed = 1.4 * scale.speed * pace(level);
       distance = 0;
-      trackLen = 1000 + level * 420 + (spec.scene % 7) * 90;
+      trackLen = stageNeed(level, 16000, 10000) + (spec.scene % 7) * 280;
       progress = 0;
       place = 3;
       goalText = "0%";
@@ -262,7 +292,7 @@ export function createUniqueGame(
         rivals.push({
           lane: i % 4,
           y: 20 + i * 36,
-          spd: 0.85 + rnd() * 1.25 + (spec.twist === "HEAT" ? 0.3 : 0),
+          spd: (0.85 + rnd() * 1.25 + (spec.twist === "HEAT" ? 0.3 : 0)) * pace(level),
           dist: 90 + i * 130 + (spec.scene % 50),
         });
       }
@@ -271,7 +301,8 @@ export function createUniqueGame(
       board = Array.from({ length: ROWS }, () => Array.from({ length: COLS }, () => 0));
       linesCleared = 0;
       dropTimer = 0;
-      goalText = "0 LINES";
+      target = stageNeed(level, 24, 16);
+      goalText = `0/${target}`;
       progress = 0;
       spawnPiece();
     }
@@ -280,9 +311,11 @@ export function createUniqueGame(
       player.y = 168;
       player.w = Math.round(12 * scale.size);
       player.h = 14;
-      for (let i = 0; i < 9; i += 1) {
+      target = stageNeed(level, 3, 2);
+      const plats = 10 + Math.min(6, level);
+      for (let i = 0; i < plats; i += 1) {
         const w = 50 + (i % 3) * 10;
-        items.push({ x: 16 + ((i * 53 + spec.scene * 11 + level * 7) % (W - w - 20)), y: 196 - i * 22, w, h: 8 });
+        items.push({ x: 16 + ((i * 53 + spec.scene * 11 + level * 7) % (W - w - 20)), y: 196 - i * (168 / plats), w, h: 8 });
       }
       items.push({ x: 140, y: 10, w: 36, h: 10 });
       player.x = items[0]?.x ?? 40;
@@ -293,6 +326,7 @@ export function createUniqueGame(
       player.y = 198;
       player.w = Math.round(12 * scale.size);
       player.h = 12;
+      target = stageNeed(level, 3, 2);
       for (let lane = 0; lane < 5; lane += 1) {
         const count = difficulty === "simple" ? 1 : 1 + (lane % 2);
         for (let i = 0; i < count; i += 1) {
@@ -313,13 +347,8 @@ export function createUniqueGame(
       player.y = 200;
       player.w = 18;
       player.h = 8;
-      const cols = 5 + Math.min(3, level);
-      const rows = 2 + Math.min(3, Math.floor(level / 2));
-      for (let r = 0; r < rows; r += 1) {
-        for (let c = 0; c < cols; c += 1) {
-          foes.push({ x: 24 + c * 34, y: 18 + r * 18, w: 16, h: 10, vx: 0.55 * spd, vy: 0, kind: 0 });
-        }
-      }
+      fillInvaders();
+      target = stageNeed(level, 2, 1);
     }
     if (spec.mode === "stack") {
       stackX = 40;
@@ -328,14 +357,14 @@ export function createUniqueGame(
       stackW = 100 * scale.size;
       items.length = 0;
       items.push({ x: 110, y: 206, w: 100, h: 10 });
-      target = 6 + level;
+      target = stageNeed(level, 14, 8);
     }
     if (spec.mode === "jump") {
       player.x = 36;
       player.y = 168;
       player.w = Math.round(14 * scale.size);
       player.h = 16;
-      target = 8 + level * 2;
+      target = stageNeed(level, 22, 14);
     }
     if (spec.mode === "maze") {
       maze = Array.from({ length: MH }, (_, y) =>
@@ -363,11 +392,11 @@ export function createUniqueGame(
       player.w = 14;
       player.h = 12;
       player.vy = 0;
-      target = 6 + level * 2;
+      target = stageNeed(level, 18, 12);
     }
     if (spec.mode === "memory") {
       tiles.length = 0;
-      const pairs = 8;
+      const pairs = Math.min(8, 4 + level);
       const bag: number[] = [];
       for (let i = 0; i < pairs; i += 1) bag.push(i, i);
       for (let i = bag.length - 1; i > 0; i -= 1) {
@@ -393,20 +422,21 @@ export function createUniqueGame(
       ball.vx = 2.2 * spd;
       ball.vy = 1.4 * spd;
       foes.push({ x: 304, y: 90, w: 6, h: 40, vx: 0, vy: 0, kind: 0 });
-      target = 5 + level;
+      target = stageNeed(level, 8, 5);
     }
     if (spec.mode === "barrel") {
       player.x = 24;
       player.y = 250;
       player.w = 12;
       player.h = 14;
+      target = stageNeed(level, 3, 2);
       for (let i = 0; i < 6; i += 1) items.push({ x: i % 2 ? 40 : 8, y: 250 - i * 40, w: 280, h: 8 });
       items.push({ x: 150, y: 12, w: 28, h: 10 });
     }
     if (spec.mode === "dungeon") {
       player.x = 20;
       player.y = 140;
-      for (let i = 0; i < 5 + level; i += 1) items.push({ x: 40 + rnd() * 280, y: 40 + rnd() * 180, w: 8, h: 8 });
+      for (let i = 0; i < stageNeed(level, 14, 8); i += 1) items.push({ x: 40 + rnd() * 280, y: 40 + rnd() * 180, w: 8, h: 8 });
       foes.push({ x: 200, y: 80, w: 12, h: 12, vx: 0.7 * spd, vy: 0.5 * spd, kind: 0 });
       target = items.length;
     }
@@ -415,13 +445,13 @@ export function createUniqueGame(
       player.y = 200;
       player.w = 16;
       player.h = 12;
-      target = 10 + level * 3;
+      target = stageNeed(level, 28, 18);
     }
     if (spec.mode === "boxer") {
       player.x = 150;
       player.y = 200;
       tell = 40;
-      target = 6 + level * 2;
+      target = stageNeed(level, 16, 12);
     }
     if (spec.mode === "missile") {
       player.x = 180;
@@ -429,7 +459,7 @@ export function createUniqueGame(
       player.w = 8;
       player.h = 8;
       for (let i = 0; i < 4; i += 1) items.push({ x: 20 + i * 90, y: 250, w: 36, h: 14 });
-      target = 8 + level * 2;
+      target = stageNeed(level, 22, 14);
     }
     if (spec.mode === "bombman") {
       player.x = 1;
@@ -438,27 +468,27 @@ export function createUniqueGame(
         Array.from({ length: MW }, (_, x) => (x % 2 === 0 && y % 2 === 0 ? 1 : 0)),
       );
       foes.push({ x: 10, y: 8, w: 1, h: 1, vx: 0, vy: 0, kind: 0 });
-      target = 4 + level;
+      target = stageNeed(level, 10, 6);
     }
     if (spec.mode === "rungun") {
       player.x = 30;
       player.y = 220;
       player.w = 12;
       player.h = 16;
-      target = 220;
+      target = stageNeed(level, 20, 14);
     }
     if (spec.mode === "brawler") {
       player.x = 24;
       player.y = 200;
       player.w = 14;
       player.h = 18;
-      target = 8 + level * 2;
+      target = stageNeed(level, 22, 14);
     }
     if (spec.mode === "rocks") {
       player.x = 180;
       player.y = 140;
       angle = 0;
-      for (let i = 0; i < 5 + level; i += 1) {
+      for (let i = 0; i < stageNeed(level, 10, 6); i += 1) {
         foes.push({ x: rnd() * 320, y: rnd() * 240, w: 18, h: 18, vx: (rnd() - 0.5) * 2, vy: (rnd() - 0.5) * 2, kind: 2 });
       }
       target = foes.length;
@@ -471,34 +501,32 @@ export function createUniqueGame(
       ball.vx = 0;
       ball.vy = 0;
       items.push({ x: 320, y: 90, w: 10, h: 90 });
-      target = 3 + level;
+      target = stageNeed(level, 6, 4);
     }
     if (spec.mode === "hoop") {
       player.x = 160;
       player.y = 230;
       items.push({ x: 150, y: 36, w: 60, h: 8 });
-      target = 5 + level;
+      target = stageNeed(level, 10, 6);
     }
     if (spec.mode === "gun") {
       player.x = 180;
       player.y = 140;
-      target = 8 + level * 2;
+      target = stageNeed(level, 22, 14);
     }
     if (spec.mode === "vert") {
       player.x = 170;
       player.y = 240;
       player.w = 14;
       player.h = 12;
-      target = 8 + level * 3;
+      target = stageNeed(level, 24, 16);
     }
     if (spec.mode === "smash") {
       player.x = 20;
       player.y = 220;
-      target = 240;
+      target = stageNeed(level, 720, 420);
     }
-    if (spec.mode === "bricks") target = Math.max(1, items.length);
     if (spec.mode === "coins") target = Math.max(1, items.length);
-    if (spec.mode === "invaders") target = Math.max(1, foes.length);
     progress = spec.mode === "race" ? 0 : 0;
     if (spec.mode === "race") goalText = "0%";
     else if (spec.mode === "tetris") goalText = "0 LINES";
@@ -508,7 +536,7 @@ export function createUniqueGame(
 
   const step = () => {
     tick += 1;
-    const spd = scale.speed * (1 + (level - 1) * 0.08);
+    const spd = scale.speed * pace(level);
 
     if (spec.mode === "snake") {
       if (up() && dir.y !== 1) nextDir = { x: 0, y: -1 };
@@ -570,7 +598,14 @@ export function createUniqueGame(
           hooks.onSfx("pickup");
         }
       }
-      if (items.length === 0) clearLevel();
+      if (items.length === 0) {
+        objective += 1;
+        if (objective >= target) clearLevel();
+        else {
+          launched = false;
+          fillBricks();
+        }
+      }
     }
 
     if (spec.mode === "dodge" || spec.mode === "catch") {
@@ -711,13 +746,13 @@ export function createUniqueGame(
             progress = Math.min(100, Math.round(((linesCleared % 10) / 10) * 100));
             goalText = `${linesCleared} LINES`;
             hud();
-            if (linesCleared >= level * 8) clearLevel();
+            if (linesCleared >= target) clearLevel();
           }
           spawnPiece();
         }
       }
-      progress = Math.min(100, Math.round((linesCleared / Math.max(1, level * 8)) * 100));
-      goalText = `${linesCleared}/${level * 8}`;
+      progress = Math.min(100, Math.round((linesCleared / Math.max(1, target)) * 100));
+      goalText = `${linesCleared}/${target}`;
       hud();
     }
 
@@ -747,9 +782,15 @@ export function createUniqueGame(
         }
       }
       if (flag && hits({ ...player }, flag)) {
+        objective += 1;
         setScore(score + 40);
-        clearLevel();
-        return;
+        if (objective >= target) {
+          clearLevel();
+          return;
+        }
+        player.x = items[0]?.x ?? 40;
+        player.y = (items[0]?.y ?? 180) - 16;
+        player.vy = 0;
       }
       if (player.y > H) fail();
       void grounded;
@@ -768,8 +809,13 @@ export function createUniqueGame(
         }
       }
       if (player.y < 18) {
+        objective += 1;
         setScore(score + 25);
-        clearLevel();
+        if (objective >= target) clearLevel();
+        else {
+          player.x = 152;
+          player.y = 198;
+        }
       }
     }
 
@@ -809,7 +855,11 @@ export function createUniqueGame(
           alien.y += 8;
         }
       }
-      if (foes.every((alien) => alien.y < 0)) clearLevel();
+      if (foes.every((alien) => alien.y < 0)) {
+        objective += 1;
+        if (objective >= target) clearLevel();
+        else fillInvaders();
+      }
     }
 
     if (spec.mode === "stack") {
@@ -952,7 +1002,8 @@ export function createUniqueGame(
           fail();
           return;
         }
-        if (pipe.y === 0 && pipe.x + pipe.w < player.x && pipe.x + pipe.w >= player.x - 2.1 * spd) {
+        if (!pipe.mark && pipe.y === 0 && pipe.x + pipe.w < player.x) {
+          pipe.mark = 1;
           setScore(score + 15);
           objective += 1;
           hooks.onSfx("pickup");
@@ -964,12 +1015,12 @@ export function createUniqueGame(
 
     if (spec.mode === "memory") {
       if (left() && !holdL) {
-        cursor = (cursor + 15) % 16;
+        cursor = (cursor + tiles.length - 1) % Math.max(1, tiles.length);
         holdL = true;
       }
       if (!left()) holdL = false;
       if (right() && !holdR) {
-        cursor = (cursor + 1) % 16;
+        cursor = (cursor + 1) % Math.max(1, tiles.length);
         holdR = true;
       }
       if (!right()) holdR = false;
@@ -1040,8 +1091,14 @@ export function createUniqueGame(
       }
       const flag = items[items.length - 1];
       if (flag && hits({ ...player }, flag)) {
+        objective += 1;
         setScore(score + 50);
-        clearLevel();
+        if (objective >= target) clearLevel();
+        else {
+          player.x = 24;
+          player.y = 250;
+          player.vy = 0;
+        }
       }
       if (player.y > H) fail();
     }
@@ -1236,7 +1293,7 @@ export function createUniqueGame(
           hooks.onSfx("pickup");
         }
       }
-      if (player.x > 320 || objective >= 8 + level * 2) {
+      if (objective >= target) {
         setScore(score + 40);
         clearLevel();
       }
@@ -1433,21 +1490,30 @@ export function createUniqueGame(
 
     if (spec.mode !== "race" && spec.mode !== "tetris") {
       if (spec.mode === "bricks") {
-        progress = Math.round((1 - items.length / Math.max(1, target)) * 100);
-        goalText = `${items.length} LEFT`;
-      } else if (spec.mode === "coins") {
+        const wall = 1 - items.length / Math.max(1, waveSize);
+        progress = Math.min(100, Math.round(((objective + wall) / Math.max(1, target)) * 100));
+        goalText = `${objective}/${target}`;
+      } else if (spec.mode === "coins" || spec.mode === "dungeon") {
         progress = Math.round((1 - items.length / Math.max(1, target)) * 100);
         goalText = `${target - items.length}/${target}`;
       } else if (spec.mode === "invaders") {
         const alive = foes.filter((foe) => foe.y >= 0).length;
-        progress = Math.round((1 - alive / Math.max(1, target)) * 100);
-        goalText = `${alive} LEFT`;
-      } else if (spec.mode === "climb") {
-        progress = Math.min(100, Math.round(((200 - player.y) / 190) * 100));
-        goalText = `${progress}%`;
+        const wall = 1 - alive / Math.max(1, waveSize);
+        progress = Math.min(100, Math.round(((objective + wall) / Math.max(1, target)) * 100));
+        goalText = `${objective}/${target}`;
       } else if (spec.mode === "maze") {
         progress = Math.round((1 - pellets.length / Math.max(1, target)) * 100);
         goalText = `${target - pellets.length}/${target}`;
+      } else if (spec.mode === "rocks") {
+        progress = Math.round((1 - foes.length / Math.max(1, target)) * 100);
+        goalText = `${target - foes.length}/${target}`;
+      } else if (spec.mode === "stack") {
+        const stacked = Math.max(0, items.length - 1);
+        progress = Math.min(100, Math.round((stacked / Math.max(1, target)) * 100));
+        goalText = `${stacked}/${target}`;
+      } else if (spec.mode === "smash") {
+        progress = Math.min(100, Math.round((player.x / Math.max(1, target)) * 100));
+        goalText = `${Math.min(target, Math.round(player.x))}/${target}`;
       } else {
         progress = Math.min(100, Math.round((objective / Math.max(1, target)) * 100));
         goalText = `${objective}/${target}`;
