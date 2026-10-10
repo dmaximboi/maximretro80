@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { ConsoleProvider } from "./app/ConsoleProvider";
 import { App } from "./app/App";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import "./styles/index.css";
 import { assertExactCatalogCount } from "./games/gameCatalog";
 
@@ -14,14 +15,16 @@ if (!root) {
 
 createRoot(root).render(
   <StrictMode>
-    <ConsoleProvider>
-      <App />
-    </ConsoleProvider>
+    <ErrorBoundary>
+      <ConsoleProvider>
+        <App />
+      </ConsoleProvider>
+    </ErrorBoundary>
   </StrictMode>,
 );
 
-if ("serviceWorker" in navigator) {
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    void navigator.serviceWorker.register("./sw.js");
+    void navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`, { scope: "/" });
   });
 }

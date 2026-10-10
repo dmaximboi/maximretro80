@@ -33,7 +33,10 @@ export function PlayCabinet() {
   const [spec, setSpec] = useState<UniqueSpec>(() =>
     selectedGame ? specForGame(selectedGame) : specFromMode("dodge", "DODGE"),
   );
-  const [difficulty, setDifficulty] = useState<Difficulty>(settings.lastDifficulty);
+  const [difficulty, setDifficulty] = useState<Difficulty>(() => {
+    const saved = settings.lastDifficulty;
+    return saved === "simple" || saved === "medium" || saved === "hard" || saved === "professor" ? saved : "simple";
+  });
   const [score, setScore] = useState(0);
   const [status, setStatus] = useState("READY");
   const [level, setLevel] = useState(1);

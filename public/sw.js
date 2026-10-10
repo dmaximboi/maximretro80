@@ -1,11 +1,8 @@
-const CACHE = "maxim-retro-v1";
+const CACHE = "maxim-retro-v2";
+const PRECACHE = ["/", "/index.html", "/manifest.webmanifest", "/icon.jpg"];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE).then((cache) =>
-      cache.addAll(["./", "./index.html", "./manifest.webmanifest", "./icon.jpg"]),
-    ),
-  );
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(PRECACHE)));
   self.skipWaiting();
 });
 
@@ -21,18 +18,32 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   if (request.method !== "GET") return;
-  event.respondWith(
-    caches.match(request).then((cached) => {
-      const fetched = fetch(request)
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return;
+
+  if (request.mode === "navigate" || request.destination === "document") {
+    event.respondWith(
+      fetch(request)
         .then((response) => {
-          if (response.ok) {
-            const copy = response.clone();
-            void caches.open(CACHE).then((cache) => cache.put(request, copy));
-          }
+          const copy = response.clone();
+          void caches.open(CACHE).then((cache) => cache.put(request, copy));
           return response;
         })
-        .catch(() => cached);
-      return cached || fetched;
+        .catch(() => caches.match(request).then((cached) => cached || caches.match("/index.html"))),
+    );
+    return;
+  }
+
+  event.respondWith(
+    caches.match(request).then((cached) => {
+      if (cached) return cached;
+      return fetch(request).then((response) => {
+        if (response.ok) {
+          const copy = response.clone();
+          void caches.open(CACHE).then((cache) => cache.put(request, copy));
+        }
+        return response;
+      });
     }),
   );
 });
